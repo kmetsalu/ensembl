@@ -1,0 +1,46 @@
+# Ensembl
+
+TODO: Write a gem description
+
+## Installation
+
+Add this line to your application's Gemfile:
+
+    gem 'ensembl'
+
+And then execute:
+
+    $ bundle
+
+Or install it yourself as:
+
+    $ gem install ensembl
+
+## Usage
+
+    require 'ensembl'
+
+### ENSEMBL.ORG database - Default configuration
+    
+    Ensembl::Variation::Variation.first
+    
+    Ensembl::Variation::Variation.first.source
+
+### Custom database
+    
+    Set following values:
+    
+    Ensembl.host = 'myhost.example.com'
+    Ensembl.port = 3306                                 # default
+    Ensembl.username = 'anonymous'                      # default
+    Ensembl.password = ''                               # default
+    Ensembl.database = 'homo_sapiens_variation_75_37'   # default
+
+
+## Contributing
+
+1. Fork it ( https://github.com/[my-github-username]/ensembl/fork )
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin my-new-feature`)
+5. Create a new Pull Request
