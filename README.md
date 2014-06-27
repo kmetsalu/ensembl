@@ -1,6 +1,8 @@
 # Ensembl
 
-TODO: Write a gem description
+Gem to access ensembl.org database. Currently only supports Variation database tables and latest version.
+
+Some of the work is inspired of [ruby-ensembl-api] project
 
 ## Installation
 
@@ -44,3 +46,6 @@ Or install it yourself as:
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create a new Pull Request
+
+
+[ruby-ensembl-api]: https://github.com/jandot/ruby-ensembl-api
