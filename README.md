@@ -28,7 +28,7 @@ Or install it yourself as:
 
 ### Custom database
     
-    Set following values:
+    # Set following values before using
     
     Ensembl.host = 'myhost.example.com'
     Ensembl.port = 3306                                 # default
@@ -39,7 +39,7 @@ Or install it yourself as:
 
 ## Contributing
 
-1. Fork it ( https://github.com/[my-github-username]/ensembl/fork )
+1. Fork it ( https://github.com/kmetsalu/ensembl/fork )
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)

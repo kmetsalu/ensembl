@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email         = ["kristjan.metsalu@ut.ee"]
   spec.summary       = %q{Gem to access Ensembl.org databases through API }
   spec.description   = %q{}
-  spec.homepage      = ""
+  spec.homepage      = "https://github.com/kmetsalu/ensembl"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files -z`.split("\x0")
