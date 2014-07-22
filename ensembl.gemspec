@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Kristjan Metsalu"]
   spec.email         = ["kristjan.metsalu@ut.ee"]
   spec.summary       = %q{ Gem to access Ensembl.org databases through API }
-  spec.description   = %q{ ensembl provides an ruby API to connect to ensembl databases. }
+  spec.description   = %q{ ensembl provides an ruby API to connect to Ensembl.org databases.  }
   spec.homepage      = "https://github.com/kmetsalu/ensembl"
   spec.license       = "MIT"
 
