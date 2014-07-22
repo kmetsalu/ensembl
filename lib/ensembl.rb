@@ -24,8 +24,16 @@ module Ensembl
       @password||=''
     end
 
-    def database
-      @database||='homo_sapiens_variation_75_37'
+    def hg_version
+      @hg_version||='37'
+    end
+
+    def version
+      @version||='75'
+    end
+
+    def species
+      @species||='homo_sapiens'
     end
 
   end
@@ -42,24 +50,63 @@ module Ensembl
     end
   end
 
-  class Connection < ActiveRecord::Base
-    self.extend TableNameOverrides
-
-    self.abstract_class = true
-
-    self.establish_connection :adapter  => "mysql2",
-                              :host     => Ensembl.host,
-                              :username => Ensembl.username,
-                              :password => Ensembl.password,
-                              :database => Ensembl.database
-
+  module SearchByName
+    def search(name)
+      table=self.arel_table
+      self.where(table[:name].matches("%#{name}%"))
+    end
   end
 
-  class ModelBase < Connection
-    self.extend PrimaryKeyOverrides
+  # class BaseConnection < ActiveRecord::Base
+  #   self.extend TableNameOverrides
+  #   self.abstract_class = true
+  # end
 
-    self.abstract_class = true
-  end
+  # module Core
+  #   class Connection < ActiveRecord::Base
+  #     self.extend TableNameOverrides
+  #
+  #     self.abstract_class = true
+  #
+  #     self.establish_connection :adapter  => "mysql2",
+  #     :host     => Ensembl.host,
+  #     :username => Ensembl.username,
+  #     :password => Ensembl.password,
+  #     :database => Ensembl.species+'_core_'+Ensembl.version+'_'+Ensembl.hg_version,
+  #     :reconnect => true
+  #
+  #   end
+  #
+  #   class ModelBase < Connection
+  #     self.extend PrimaryKeyOverrides
+  #
+  #     self.abstract_class = true
+  #   end
+  # end
+  #
+  # module Variation
+  #   class Connection < ActiveRecord::Base
+  #     self.extend TableNameOverrides
+  #
+  #     self.abstract_class = true
+  #
+  #     self.establish_connection :adapter  => "mysql2",
+  #                               :host     => Ensembl.host,
+  #                               :username => Ensembl.username,
+  #                               :password => Ensembl.password,
+  #                               :database => Ensembl.species+'_variation_'+Ensembl.version+'_'+Ensembl.hg_version,
+  #                               :reconnect => true
+  #
+  #   end
+  #
+  #   class ModelBase < Connection
+  #     self.extend PrimaryKeyOverrides
+  #
+  #     self.abstract_class = true
+  #   end
+  # end
+
 end
 
+require File.dirname(__FILE__) + '/ensembl/core/activerecord.rb'
 require File.dirname(__FILE__) + '/ensembl/variation/activerecord.rb'

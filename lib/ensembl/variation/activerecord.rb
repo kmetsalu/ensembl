@@ -2,7 +2,27 @@ require 'active_record'
 
 module Ensembl
   module Variation
-    class Allele < Ensembl::ModelBase
+    class Connection < ActiveRecord::Base
+      self.extend TableNameOverrides
+
+      self.abstract_class = true
+
+      self.establish_connection :adapter  => "mysql2",
+                                :host     => Ensembl.host,
+                                :username => Ensembl.username,
+                                :password => Ensembl.password,
+                                :database => Ensembl.species+'_variation_'+Ensembl.version+'_'+Ensembl.hg_version,
+                                :reconnect => true
+
+    end
+
+    class ModelBase < Connection
+      self.extend PrimaryKeyOverrides
+
+      self.abstract_class = true
+    end
+
+    class Allele < ModelBase
       belongs_to :variation
       belongs_to :population
       belongs_to :subsnp_handle
@@ -10,78 +30,77 @@ module Ensembl
 
     end
 
-    class AlleleCode < Ensembl::ModelBase
+    class AlleleCode < ModelBase
       has_many :genotype_codes
 
     end
 
-    class AssociateStudy < Ensembl::Connection
+    class AssociateStudy < Connection
       belongs_to :study, foreign_key: 'study1_id', class_name: 'Study'
       belongs_to :associated_study, foreign_key: 'study2_id', class_name: 'Study'
 
     end
 
-    class Attrib < Ensembl::ModelBase
+    class Attrib < ModelBase
       belongs_to :attrib_type
-
     end
 
-    class AttribSet < Ensembl::ModelBase
+    class AttribSet < ModelBase
       belongs_to :attrib
 
     end
 
-    class AttribType < Ensembl::ModelBase
+    class AttribType < ModelBase
       has_many :attribs, class_name: 'Attrib'
       has_many :pheotype_feature_attrib
       has_many :phenotype_features, through: :phenotype_feature_attrib
 
     end
 
-    class CompressedGenotypeRegion < Ensembl::Connection
+    class CompressedGenotypeRegion < Connection
       belongs_to :individual
-
+      belongs_to :seq_region, class_name: 'Ensembl::Core::SeqRegion'
     end
 
-    class CompressedGenotypeVar < Ensembl::Connection
+    class CompressedGenotypeVar < Connection
       belongs_to :variation
       belongs_to :subsnp_handle, foreign_key: 'subsnp_id'
 
     end
 
-    class CoordSystem < Ensembl::ModelBase
+    class CoordSystem < ModelBase
     end
 
-    class FailedAllele < Ensembl::ModelBase
+    class FailedAllele < ModelBase
       belongs_to :failed_description
       belongs_to :allele
 
     end
 
-    class FailedDescription < Ensembl::ModelBase
+    class FailedDescription < ModelBase
       belongs_to :failed_variation
 
     end
 
-    class FailedStructuralVariation < Ensembl::ModelBase
+    class FailedStructuralVariation < ModelBase
       belongs_to :structural_variation
       belongs_to :failed_description
 
     end
 
-    class FailedVariation < Ensembl::ModelBase
+    class FailedVariation < ModelBase
       belongs_to :variation
       has_one :failed_description
 
     end
 
-    class GenotypeCode < Ensembl::ModelBase
+    class GenotypeCode < ModelBase
       belongs_to :allele_code
       belongs_to :genotype_code
 
     end
 
-    class Individual < Ensembl::ModelBase
+    class Individual < ModelBase
       belongs_to :individual_type
       belongs_to :father, foreign_key: 'father_individual_id', class_name: 'Individual'
       belongs_to :mother, foreign_key: 'mother_individual_id', class_name: 'Individual'
@@ -92,57 +111,59 @@ module Ensembl
       has_many :individual_synonyms, foreign_key: :synonym_id
       has_many :synonyms, through: :individual_synonyms
 
+      has_many :individual_genotype_multiple_bps
+
       scope :with_fathers, -> { where.not(father:nil) }
       scope :with_mothers, -> { where.not(mother:nil) }
 
     end
 
-    class IndividualGenotypeMultipleBp < Ensembl::Connection
+    class IndividualGenotypeMultipleBp < Connection
       belongs_to :variation
       belongs_to :individual
       belongs_to :subsnp_handle, foreign_key: 'subsnp_id'
 
     end
 
-    class IndividualPopulation < Ensembl::Connection
+    class IndividualPopulation < Connection
       belongs_to :individual
       belongs_to :population
-
     end
 
-    class IndividualSynonym < Ensembl::Connection
+    class IndividualSynonym < Connection
       belongs_to :individual
       belongs_to :source
       belongs_to :synonym, class_name: 'Individual'
 
     end
 
-    class IndividualType < Ensembl::ModelBase
+    class IndividualType < ModelBase
       has_many :individuals
     end
 
-    class Meta < Ensembl::ModelBase
+    class Meta < ModelBase
       # TODO: Link with others
     end
 
-    class MetaCoord < Ensembl::Connection
+    class MetaCoord < Connection
     end
 
-    class MotifFreatureVariation < Ensembl::ModelBase
+    class MotifFreatureVariation < ModelBase
       belongs_to :variation_feature
     end
 
-    class Phenotype < Ensembl::ModelBase
+    class Phenotype < ModelBase
       has_many :phenotype_features
     end
 
-    class PhenotypeFeature < Ensembl::ModelBase
-      # Hack because using type column in the database
+    class PhenotypeFeature < ModelBase
+      # FIXME: Hack because using type column in the database
       self.inheritance_column = ':_no_inheritance_column'
 
       belongs_to :phenotype
       belongs_to :source
       belongs_to :study
+      belongs_to :seq_region, class_name: 'Ensembl::Core::SeqRegion'
 
       has_many :phenotype_feature_attrib
       has_many :attrib_types, through: :phenotype_feature_attrib
@@ -153,15 +174,17 @@ module Ensembl
 
     end
 
-    class PhenotypeFeatureAttrib < Ensembl::Connection
+    class PhenotypeFeatureAttrib < Connection
       belongs_to :attrib_type
       belongs_to :phenotype_feature
 
     end
 
-    class Population < Ensembl::ModelBase
+    class Population < ModelBase
+      self.extend Ensembl::SearchByName
+
       has_many :population_synonyms
-      has_many :synonyms, through: :population_synonyms, source: :synonym
+      #has_many :synonyms, through: :population_synonyms, source: :synonym
       has_many :alleles
 
       has_many :individual_populations
@@ -169,61 +192,82 @@ module Ensembl
 
       has_many :population_structures, foreign_key: 'super_population_id'
       has_many :sub_populations, through: :population_structures, source: :sub_population
+      has_many :parents, through: :population_structures, source: :super_populaton#, foreign_key: 'sub_population_id'
 
       has_many :population_genotypes
 
+      def parent
+        ps=PopulationStructure.find_by(sub_population: id)
+        ps.super_population unless ps.nil?
+      end
+
       def all_individual_populations
-        IndividualPopulation.where(population_id: sub_populations.pluck(:population_id))
+        IndividualPopulation.where(population_id: sub_population_ids(self)<<id)
       end
 
       def all_individuals
         Individual.where individual_id: all_individual_populations.pluck(:individual_id)
       end
 
+      def all_population_genotypes
+        PopulationGenotype.where(population_id: sub_population_ids(self)<<id)
+      end
+
+      private
+        def sub_population_ids(population,array=[])
+          subs=population.sub_populations
+          subs.each do |p|
+            array<<p.id
+            sub_population_ids(p,array)
+          end
+        end
     end
 
-    class PopulationSynonym < Ensembl::Connection
-      belongs_to :synonym, foreign_key: 'synonym_id', class_name: 'Population'
+    class PopulationSynonym < Connection
+      #belongs_to :synonym, foreign_key: 'synonym_id', class_name: 'Population'
       belongs_to :population
       belongs_to :source
     end
 
-    class PopulationGenotype < Ensembl::ModelBase
+    class PopulationGenotype < ModelBase
       belongs_to :variation
       belongs_to :population
       belongs_to :subsnp_handle, foreign_key: 'subsnp_id'
+
       belongs_to :genotype_code
-
+      has_one :allele_code, through: :genotype_code
     end
 
-    class PopulationStructure < Ensembl::Connection
-      belongs_to :population, foreign_key: 'super_population_id', class_name: 'Population'
+    class PopulationStructure < Connection
+      belongs_to :super_population, foreign_key: 'super_population_id', class_name: 'Population'
       belongs_to :sub_population, foreign_key: 'sub_population_id', class_name: 'Population'
+    end
+
+    class ProteinFunctionPredictions < Connection
 
     end
 
-    class ProteinFunctionPredictions < Ensembl::Connection
+    class Publication < ModelBase
+
     end
 
-    class Publication < Ensembl::ModelBase
-    end
-
-    class RegulatoryFeatureVariation < Ensembl::ModelBase
+    class RegulatoryFeatureVariation < ModelBase
       belongs_to :variation_feature
-
     end
 
-    class SeqRegion < Ensembl::ModelBase
-      belongs_to :coord_system
+    # class SeqRegion < Ensembl::Core::SeqRegion
+    #   belongs_to :coord_system
+    #   has_many :compressed_genotype_regions
+    #   has_many :phenotype_features
+    #   has_many :structureal_variation_features
+    # end
 
-    end
-
-    class StrainGtypePoly < Ensembl::Connection
+    class StrainGtypePoly < Connection
       belongs_to :variation
 
     end
 
-    class StructuralVariation < Ensembl::ModelBase
+    class StructuralVariation < ModelBase
       belongs_to :source
       belongs_to :study
 
@@ -245,13 +289,13 @@ module Ensembl
 
     end
 
-    class StructuralVariationAssociation < Ensembl::Connection
+    class StructuralVariationAssociation < Connection
       belongs_to :structural_variation
       belongs_to :supporting_structural_variation, foreign_key: 'supporting_structural_variation_id', class_name: 'StructuralVariation'
     end
 
-    class StructuralVariationFeature < Ensembl::ModelBase
-      belongs_to :seq_region
+    class StructuralVariationFeature < ModelBase
+      belongs_to :seq_region, class_name: 'Ensembl::Core::SeqRegion'
       belongs_to :structural_variation
       belongs_to :source
       belongs_to :study
@@ -262,67 +306,66 @@ module Ensembl
 
     end
 
-    class StructuralVariationSample < Ensembl::ModelBase
+    class StructuralVariationSample < ModelBase
       belongs_to :structural_variation
       belongs_to :individual
     end
 
-    class Study < Ensembl::ModelBase
-      has_many :study_variations
-      has_many :variations, through: :study_variations
+    class Source < ModelBase
 
     end
 
-    class Source < Ensembl::ModelBase
-
-    end
-
-    class Study < Ensembl::ModelBase
+    class Study < ModelBase
       has_many :associate_studies, foreign_key: 'study1_id'
       has_many :associated_studies, through: :associate_studies, source: :associated_study
 
       # FIXME: No data in database
+      has_many :study_variations
       has_many :variations, through: :study_variations
     end
 
     # FIXME: No data in database
-    class StudyVariation < Ensembl::Connection
+    class StudyVariation < Connection
       belongs_to :study
       belongs_to :variation
     end
 
-    class SubmitterHandle < Ensembl::Connection
+    class SubmitterHandle < Connection
       self.primary_key = 'handle_id'
     end
 
-    class SubsnpHandle < Ensembl::Connection
+    class SubsnpHandle < Connection
       self.primary_key = 'subsnp_id'
 
       has_many :subsnp_maps
     end
 
-    class SubsnpMap < Ensembl::Connection
+    class SubsnpMap < Connection
       belongs_to :variation
       belongs_to :subsnp_handle, foreign_key: 'subsnp_id'
     end
 
-    class TaggedVariationFeature < Ensembl::ModelBase
+    class TaggedVariationFeature < ModelBase
       belongs_to :variation_feature
       belongs_to :population
     end
 
-    class TranscriptVariation < Ensembl::ModelBase
+    class TranscriptVariation < ModelBase
       belongs_to :variation_feature
 
     end
 
-    class TranslationMd5 < Ensembl::ModelBase
+    class TranslationMd5 < ModelBase
 
     end
 
-    class Variation < Ensembl::ModelBase
+    class Variation < ModelBase
+      self.extend Ensembl::SearchByName
+
       belongs_to :source
+
       has_many :variation_synonyms
+
       has_many :failed_variations
       has_many :alleles
       has_many :population_genotypes
@@ -334,9 +377,27 @@ module Ensembl
       has_many :variation_genenames
       has_many :variation_hgvs, class_name: 'VariationHgvs'
       has_many :variation_sets
+      has_many :variation_features
+
+      has_many :individual_genotype_multiple_bps
+      has_many :compressed_genotype_vars
 
       def phenotype_features
         PhenotypeFeature.where(object_id: name, type: 'Variation')
+      end
+
+      def synonyms
+        variation_synonyms.map{ |vs| vs.name }
+      end
+
+
+      # Find Variation by also using VariationSynonyms
+      # @name: name of the variation
+      # @return: [Variation]
+      def self.find_by_name(name)
+        v  = self.find_by(name: name)
+        vs = VariationSynonym.eager_load(:variation).find_by(name: name) if v.nil?
+        vs.variation unless vs.nil?
       end
 
       def all_phenotype_features
@@ -344,61 +405,80 @@ module Ensembl
         object_ids<<name
         PhenotypeFeature.where(object_id: object_ids, type: 'Variation')
       end
+
+      # def population_genotypes
+      #   PopulationGenotype.where(variation_id: id)
+      # end
     end
 
-    class VariationCitation < Ensembl::Connection
+    class VariationCitation < Connection
       self.table_name = 'variation_citation'
       belongs_to :variation
       belongs_to :publication
     end
 
-    class VariationFeature < Ensembl::ModelBase
+    class VariationFeature < ModelBase
       belongs_to :variation
       belongs_to :source
+      belongs_to :seq_region, class_name: 'Ensembl::Core::SeqRegion'
+
       has_many :transcript_variations
       has_many :motif_freature_variations
       has_many :tagged_variation_features
 
+      def variation_sets
+        VariationSets.where[variation_set_id: [variation_set_id.split(',').map{|id| id.to_i }]] unless variation_set_id.nil?
+      end
+
+      def class_type
+        Attrib.find(class_attrib_id) unless class_attrib_id.nil?
+      end
     end
 
-    class VariationGenename < Ensembl::Connection
+    class VariationGenename < Connection
       belongs_to :variation
     end
 
-    class VariationHgvs < Ensembl::Connection
+    class VariationHgvs < Connection
       belongs_to :variation
     end
 
-    class VariationSet < Ensembl::ModelBase
+    class VariationSet < ModelBase
+      self.extend Ensembl::SearchByName
+
       belongs_to :short_name, foreign_key: 'short_name_attrib_id', class_name: 'Attrib'
       has_many :structural_variations
 
-      has_many :variation_set_structures
-      has_many :sub_variation_sets, through: :variation_set_structures, source: :sub_variation_set
+      #has_many :variation_set_structures, foreign_key: 'variation_set_super'
+      has_many :sub_variation_set_structures, foreign_key: 'variation_set_super', class_name: 'VariationSetStructure'
+      has_many :sub_variation_sets, through: :sub_variation_set_structures , source: :sub_variation_set
 
-      has_many :variations
+      has_many :super_variation_set_structures, foreign_key: 'variation_set_sub', class_name: 'VariationSetStructure'
+      has_many :super_variation_sets, through: :super_variation_set_structures , source: :super_variation_set
+
+      has_many :variation_set_variations
+      has_many :variations, through: :variation_set_variations
+
     end
 
-    class VariationSetStructuralVariation < Ensembl::Connection
+    class VariationSetStructuralVariation < Connection
       belongs_to :structural_variation
       belongs_to :variation_set
     end
 
-    class VariationSetStructure < Ensembl::Connection
-      belongs_to :super_variation_set, foreign_key: 'super_variation_set_id', class_name: 'VariationSet'
-      belongs_to :sub_variation_set, foreign_key: 'sub_variation_set_id', class_name: 'VariationSet'
+    class VariationSetStructure < Connection
+      belongs_to :super_variation_set, foreign_key: 'variation_set_super', class_name: 'VariationSet'
+      belongs_to :sub_variation_set, foreign_key: 'variation_set_sub', class_name: 'VariationSet'
     end
 
-    class VariationSetVariation < Ensembl::Connection
+    class VariationSetVariation < Connection
       belongs_to :variation
       belongs_to :variation_set
     end
 
-    class VariationSynonym < Ensembl::ModelBase
+    class VariationSynonym < ModelBase
       belongs_to :variation
       belongs_to :source
     end
-
-
   end
 end

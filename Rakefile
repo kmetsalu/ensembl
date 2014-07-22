@@ -1,6 +1,6 @@
 require "bundler/gem_tasks"
 
 task :console do
-  exec "irb -r ensembl -I ./lib"
+  exec "pry -r ensembl -I ./lib"
 end
 
