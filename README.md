@@ -2,7 +2,7 @@
 
 Gem to access ensembl.org database. Currently only supports Variation database tables and latest version.
 
-Some of the work is inspired of [ruby-ensembl-api] project
+Some of the work is inspired of [ruby-ensembl-api] project.
 
 ## Installation
 
@@ -30,14 +30,16 @@ Or install it yourself as:
 
 ### Custom database
     
-    # Set following values before using
+    # Set following values before using - Only Human databases is somewhat tested.
     
     Ensembl.host = 'myhost.example.com'
     Ensembl.port = 3306                                 # default
     Ensembl.username = 'anonymous'                      # default
     Ensembl.password = ''                               # default
-    Ensembl.database = 'homo_sapiens_variation_75_37'   # default
-
+    Ensembl.species = 'homo_sapiens'                    # default
+    Ensembl.version = 75                                # default
+    Ensembl.hg_version = 37                             # default
+    
 
 ## Contributing
 
