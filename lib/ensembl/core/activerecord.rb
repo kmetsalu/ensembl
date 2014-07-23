@@ -1,5 +1,6 @@
 module Ensembl
   module Core
+
     module StableIdHistory
       def previous_stable_ids
         StableIdEvent.where(new_stable_id: stable_id)

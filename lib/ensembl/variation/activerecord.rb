@@ -309,6 +309,7 @@ module Ensembl
     class StructuralVariationSample < ModelBase
       belongs_to :structural_variation
       belongs_to :individual
+      belongs_to :strain, foreign_key: 'strain_id', class_name: 'Individual'
     end
 
     class Source < ModelBase
