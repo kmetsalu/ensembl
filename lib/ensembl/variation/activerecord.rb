@@ -47,7 +47,6 @@ module Ensembl
 
     class AttribSet < ModelBase
       belongs_to :attrib
-
     end
 
     class AttribType < ModelBase
@@ -73,7 +72,7 @@ module Ensembl
         # FIXME: Should be in GenotypeCodes class or should use caching
         genotype_codes=genotype_code_ids.uniq.inject({}) { |hsh, gc_id | hsh[gc_id]=GenotypeCode.find gc_id;hsh  }
 
-        @igs||=unpacked_genotypes.map{|s| IndividualGenotype.new(s[0],s[1],genotype_codes[s[1]])}
+        @igs||=unpacked_genotypes.map{|s| IndividualGenotype.new({ individual_id:  s[0],genotype_code_id:s[1]})}
       end
 
       def unpacked_genotypes
@@ -144,31 +143,6 @@ module Ensembl
 
     end
 
-    class IndividualGenotype
-      attr_reader :individual_id,:genotype_code_id
-
-      # @individual_id - id to get #Individual from the database
-      # @genotype_code_id - id to get #GenotypeCode from the database
-      # @genotype_code - optimization to provide #GenotypeCode #TODO try to use cache
-      def initialize(individual_id,genotype_code_id,genotype_code=nil)
-        @individual_id = individual_id
-        @genotype_code_id = genotype_code_id
-        @genotype_code=genotype_code
-      end
-
-      def population_ids
-        IndividualPopulation.where(individual_id: @individual_id)
-      end
-
-      def individual
-        @individual||=Individual.find @individual_id
-      end
-
-      def genotype_code
-        @genotype_code||=GenotypeCode.find @genotype_code_id
-      end
-    end
-
     class IndividualGenotypeMultipleBp < Connection
       belongs_to :variation
       belongs_to :individual
@@ -228,29 +202,26 @@ module Ensembl
     class PhenotypeFeatureAttrib < Connection
       belongs_to :attrib_type
       belongs_to :phenotype_feature
-
     end
 
     class Population < ModelBase
       self.extend Ensembl::SearchByName
 
-      has_many :population_synonyms
-      #has_many :synonyms, through: :population_synonyms, source: :synonym
       has_many :alleles
+      has_many :population_synonyms
 
       has_many :individual_populations
       has_many :individuals, through: :individual_populations
 
-      has_many :population_structures, foreign_key: 'super_population_id'
+      has_many :sub_population_structures, foreign_key: 'super_population_id', class_name: 'PopulationStructure'
       has_many :sub_populations, through: :population_structures, source: :sub_population
-      has_many :parents, through: :population_structures, source: :super_populaton#, foreign_key: 'sub_population_id'
+
+      has_many :super_population_structures, foreign_key: 'sub_population_id', class_name: 'PopulationStructure'
+      has_many :super_populations, through: :population_structures, source: :super_populaton
 
       has_many :population_genotypes
 
-      def parent
-        ps=PopulationStructure.find_by(sub_population: id)
-        ps.super_population unless ps.nil?
-      end
+      scope :displayable, -> { where(display:'LD')}
 
       def all_individual_populations
         IndividualPopulation.where(population_id: sub_population_ids(self)<<id)
@@ -500,7 +471,6 @@ module Ensembl
       belongs_to :short_name, foreign_key: 'short_name_attrib_id', class_name: 'Attrib'
       has_many :structural_variations
 
-      #has_many :variation_set_structures, foreign_key: 'variation_set_super'
       has_many :sub_variation_set_structures, foreign_key: 'variation_set_super', class_name: 'VariationSetStructure'
       has_many :sub_variation_sets, through: :sub_variation_set_structures , source: :sub_variation_set
 

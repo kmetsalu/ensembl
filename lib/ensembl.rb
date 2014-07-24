@@ -110,3 +110,4 @@ end
 
 require File.dirname(__FILE__) + '/ensembl/core/activerecord.rb'
 require File.dirname(__FILE__) + '/ensembl/variation/activerecord.rb'
+require File.dirname(__FILE__) + '/ensembl/variation/tableless.rb'
