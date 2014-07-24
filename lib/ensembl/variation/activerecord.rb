@@ -66,6 +66,32 @@ module Ensembl
       belongs_to :variation
       belongs_to :subsnp_handle, foreign_key: 'subsnp_id'
 
+      def individual_genotypes
+        nil if genotypes.nil?
+
+        # To decrease number of DB queries needed
+        # FIXME: Should be in GenotypeCodes class or should use caching
+        genotype_codes=genotype_code_ids.uniq.inject({}) { |hsh, gc_id | hsh[gc_id]=GenotypeCode.find gc_id;hsh  }
+
+        @igs||=unpacked_genotypes.map{|s| IndividualGenotype.new(s[0],s[1],genotype_codes[s[1]])}
+      end
+
+      def unpacked_genotypes
+        unpack_genotypes.each_slice(2).map{|sl| sl }
+      end
+
+      def individual_ids
+        unpack_genotypes.select.each_with_index{|str,i| i.even?}
+      end
+
+      def genotype_code_ids
+        unpack_genotypes.select.each_with_index{|str,i| i.odd?}
+      end
+
+      protected
+      def unpack_genotypes
+        @g_unpacked||=genotypes.unpack('ww*') unless genotypes.nil?
+      end
     end
 
     class CoordSystem < ModelBase
@@ -95,8 +121,8 @@ module Ensembl
     end
 
     class GenotypeCode < ModelBase
+
       belongs_to :allele_code
-      belongs_to :genotype_code
 
     end
 
@@ -116,6 +142,31 @@ module Ensembl
       scope :with_fathers, -> { where.not(father:nil) }
       scope :with_mothers, -> { where.not(mother:nil) }
 
+    end
+
+    class IndividualGenotype
+      attr_reader :individual_id,:genotype_code_id
+
+      # @individual_id - id to get #Individual from the database
+      # @genotype_code_id - id to get #GenotypeCode from the database
+      # @genotype_code - optimization to provide #GenotypeCode #TODO try to use cache
+      def initialize(individual_id,genotype_code_id,genotype_code=nil)
+        @individual_id = individual_id
+        @genotype_code_id = genotype_code_id
+        @genotype_code=genotype_code
+      end
+
+      def population_ids
+        IndividualPopulation.where(individual_id: @individual_id)
+      end
+
+      def individual
+        @individual||=Individual.find @individual_id
+      end
+
+      def genotype_code
+        @genotype_code||=GenotypeCode.find @genotype_code_id
+      end
     end
 
     class IndividualGenotypeMultipleBp < Connection
@@ -233,8 +284,8 @@ module Ensembl
       belongs_to :variation
       belongs_to :population
       belongs_to :subsnp_handle, foreign_key: 'subsnp_id'
-
       belongs_to :genotype_code
+
       has_one :allele_code, through: :genotype_code
     end
 
@@ -313,7 +364,6 @@ module Ensembl
     end
 
     class Source < ModelBase
-
     end
 
     class Study < ModelBase
