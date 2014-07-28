@@ -195,7 +195,7 @@ module Ensembl
       # FIXME: Hack because using type column in the database
       self.inheritance_column = ':_no_inheritance_column'
 
-      # default_scope -> { includes(:phenotype_feature_attribs) }
+      # default_scope -> { includes(:phenotype,:source,:study) }
 
       alias_attribute :object_id_column, :object_id
 
@@ -374,9 +374,18 @@ module Ensembl
     end
 
     class Source < ModelBase
+      has_many :studies
+
+      scope :no_db_gap, -> { where.not(source_id: 46)}
     end
 
     class Study < ModelBase
+      include SearchByAttribute
+
+      default_scope -> { includes(:source) }
+
+      belongs_to :source
+
       has_many :associate_studies, foreign_key: 'study1_id'
       has_many :associated_studies, through: :associate_studies, source: :associated_study
 
@@ -447,6 +456,41 @@ module Ensembl
         PhenotypeFeature.eager_load(:phenotype).where(object_id_column: name, type: 'Variation')
       end
 
+      # Made because of the need to cut down database queries
+      # @return
+      # { phenotype_feature_id =>
+      #   { :phenotype=> "Phenotype description" ,
+      #     :phenotype_id => _ ,
+      #     :p_value => _ ,
+      #     :odds_ratio => _,
+      #     :risk_allele => _ },
+      #  phenotype_feature_id =>
+      #   { :phenotype=> "Phenotype description" ,
+      #     :phenotype_id => _ ,
+      #     :p_value => _ ,
+      #     :odds_ratio => _,
+      #     :risk_allele => _ }}
+      def phenotype_features_hash
+
+        # Do enable two level inserts hsh[:first][:second]
+        hash=Hash.new{ |hsh,key| hsh[key] = Hash.new {} }
+
+        all_phenotype_features
+        .joins(:phenotype)
+        .pluck(:phenotype_feature_id,'phenotype.description',:phenotype_id)
+        .each{ |r| hash[r[0]][:phenotype]=r[1]; hash[r[0]][:phenotype_id]=r[2]}
+
+
+        PhenotypeFeatureAttrib
+        .joins(:attrib_type)
+        .where(phenotype_feature_id: hash.keys, attrib_type: { attrib_type_id: [14,15,24] })
+        .pluck('phenotype_feature_attrib.phenotype_feature_id','phenotype_feature_attrib.value','attrib_type.name')
+        .each{ |v| hash[v[0]][v[2].parameterize.underscore.to_sym]=v[1] }
+
+        hash
+      end
+
+
       def synonyms
         variation_synonyms.map{ |vs| vs.name }
       end
@@ -467,13 +511,6 @@ module Ensembl
 
         counts.group_by{|k,v| k[0]}
       end
-
-      # def individual_populations(individual_ids)
-      #   IndividualPopulation
-      #   .joins(:population)
-      #   .where(population: { display:true })
-      #   .where(individual_population: { individual_id: individual_ids })
-      # end
 
       # Find Variation by also using VariationSynonyms
       # @name: name of the variation
