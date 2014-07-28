@@ -8,14 +8,16 @@ module Ensembl
 
       column :individual_id, :integer
       column :genotype_code_id, :integer
+      column :allele, :string
 
       belongs_to :individual
       belongs_to :genotype_code
 
-      has_one :allele_code, through: :genotype_code
+      #has_one :allele_code, through: :genotype_code
 
       delegate :individual_populations, to: :individual
       delegate :populations, to: :individual
+
 
     end
   end

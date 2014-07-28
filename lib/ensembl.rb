@@ -57,6 +57,13 @@ module Ensembl
     end
   end
 
+  module SearchByAttribute
+    def search(attribute, string)
+      table=self.arel_table
+      self.where(table[attribute].matches("%#{string}%"))
+    end
+  end
+
   # class BaseConnection < ActiveRecord::Base
   #   self.extend TableNameOverrides
   #   self.abstract_class = true

@@ -42,6 +42,8 @@ module Ensembl
     end
 
     class Attrib < ModelBase
+      self.extend SearchByAttribute
+
       belongs_to :attrib_type
     end
 
@@ -70,9 +72,14 @@ module Ensembl
 
         # To decrease number of DB queries needed
         # FIXME: Should be in GenotypeCodes class or should use caching
-        genotype_codes=genotype_code_ids.uniq.inject({}) { |hsh, gc_id | hsh[gc_id]=GenotypeCode.find gc_id;hsh  }
+        allele_codes=GenotypeCode.eager_load(:allele_code).where(:genotype_code_id=>genotype_code_ids.uniq).inject({}){|hsh,gc|hsh[gc.genotype_code_id]=gc.allele_code.allele;hsh}
 
-        @igs||=unpacked_genotypes.map{|s| IndividualGenotype.new({ individual_id:  s[0],genotype_code_id:s[1]})}
+            #genotype_code_ids.uniq.inject({}) { |hsh, gc_id | hsh[gc_id]=GenotypeCode.find(gc_id).allele_code.allele;hsh  }
+
+        @igs||=unpacked_genotypes.map{|s|
+          IndividualGenotype.new({ individual_id:  s[0],
+                                   genotype_code_id:s[1],
+                                   allele: allele_codes[s[1]] })}
       end
 
       def unpacked_genotypes
@@ -153,6 +160,9 @@ module Ensembl
     class IndividualPopulation < Connection
       belongs_to :individual
       belongs_to :population
+
+      scope :displayable, -> { joins(:population).where(population: {display:true})}
+      scope :by_ids, ->(ids) { where(individual_id: ids) }
     end
 
     class IndividualSynonym < Connection
@@ -185,13 +195,15 @@ module Ensembl
       # FIXME: Hack because using type column in the database
       self.inheritance_column = ':_no_inheritance_column'
 
+      alias_attribute :object_id_column, :object_id
+
       belongs_to :phenotype
       belongs_to :source
       belongs_to :study
       belongs_to :seq_region, class_name: 'Ensembl::Core::SeqRegion'
 
-      has_many :phenotype_feature_attrib
-      has_many :attrib_types, through: :phenotype_feature_attrib
+      has_many :phenotype_feature_attribs
+      has_many :attrib_types, through: :phenotype_feature_attribs
 
       def variation
         Variation.find_by name: object_id
@@ -405,20 +417,44 @@ module Ensembl
       has_many :compressed_genotype_vars
 
       def phenotype_features
-        PhenotypeFeature.where(object_id: name, type: 'Variation')
+        PhenotypeFeature.eager_load(:phenotype).where(object_id_column: name, type: 'Variation')
       end
 
       def synonyms
         variation_synonyms.map{ |vs| vs.name }
       end
 
+      def genotype_frequencies
+        igs=compressed_genotype_vars
+        .map{|cgv| cgv.individual_genotypes }
+        .flatten
+        .each_with_object(Hash.new){ |o,hsh| hsh[o.individual_id] = o.allele;hsh}
+
+        counts=Hash.new 0
+
+        IndividualPopulation
+        .displayable
+        .by_ids(igs.keys)
+        .map{|ip| [ip.population_id,igs[ip.individual_id]] }
+        .each{|pig| counts[pig]+=1 }
+
+        counts.group_by{|k,v| k[0]}
+      end
+
+      def individual_populations(individual_ids)
+        IndividualPopulation
+        .joins(:population)
+        .where(population: { display:true })
+        .where(individual_population: { individual_id: individual_ids })
+      end
 
       # Find Variation by also using VariationSynonyms
       # @name: name of the variation
       # @return: [Variation]
       def self.find_by_name(name)
         v  = self.find_by(name: name)
-        vs = VariationSynonym.eager_load(:variation).find_by(name: name) if v.nil?
+        return v unless v.nil?
+        vs = VariationSynonym.eager_load(:variation).find_by(name: name)
         vs.variation unless vs.nil?
       end
 
