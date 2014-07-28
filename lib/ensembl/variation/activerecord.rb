@@ -195,6 +195,8 @@ module Ensembl
       # FIXME: Hack because using type column in the database
       self.inheritance_column = ':_no_inheritance_column'
 
+      # default_scope -> { includes(:phenotype_feature_attribs) }
+
       alias_attribute :object_id_column, :object_id
 
       belongs_to :phenotype
@@ -205,8 +207,29 @@ module Ensembl
       has_many :phenotype_feature_attribs
       has_many :attrib_types, through: :phenotype_feature_attribs
 
+      scope :significant, -> { where(is_significant: true )}
+
       def variation
         Variation.find_by name: object_id
+      end
+
+      def risk_allele
+        pf=phenotype_feature_attribs.risk_alleles.first
+        pf.value unless pf.nil?
+      end
+
+      def p_value
+        pf=phenotype_feature_attribs.p_values.first
+        pf.value unless pf.nil?
+      end
+
+      def odds_ratio
+        pf=phenotype_feature_attribs.odds_ratios.first
+        pf.value unless pf.nil?
+      end
+
+      def description
+        phenotype.description
       end
 
     end
@@ -214,6 +237,10 @@ module Ensembl
     class PhenotypeFeatureAttrib < Connection
       belongs_to :attrib_type
       belongs_to :phenotype_feature
+
+      scope :risk_alleles, -> { where(attrib_type_id: 14) }
+      scope :p_values, -> { where(attrib_type_id: 15) }
+      scope :odds_ratios, -> { where(attrib_type_id: 24)}
     end
 
     class Population < ModelBase
@@ -441,12 +468,12 @@ module Ensembl
         counts.group_by{|k,v| k[0]}
       end
 
-      def individual_populations(individual_ids)
-        IndividualPopulation
-        .joins(:population)
-        .where(population: { display:true })
-        .where(individual_population: { individual_id: individual_ids })
-      end
+      # def individual_populations(individual_ids)
+      #   IndividualPopulation
+      #   .joins(:population)
+      #   .where(population: { display:true })
+      #   .where(individual_population: { individual_id: individual_ids })
+      # end
 
       # Find Variation by also using VariationSynonyms
       # @name: name of the variation
@@ -461,12 +488,9 @@ module Ensembl
       def all_phenotype_features
         object_ids = variation_synonyms.pluck :name
         object_ids<<name
-        PhenotypeFeature.where(object_id: object_ids, type: 'Variation')
+        PhenotypeFeature.eager_load(:phenotype).where(object_id: object_ids, type: 'Variation')
       end
 
-      # def population_genotypes
-      #   PopulationGenotype.where(variation_id: id)
-      # end
     end
 
     class VariationCitation < Connection
