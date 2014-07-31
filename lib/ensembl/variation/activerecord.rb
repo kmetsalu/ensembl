@@ -7,12 +7,7 @@ module Ensembl
 
       self.abstract_class = true
 
-      self.establish_connection :adapter  => "mysql2",
-                                :host     => Ensembl.host,
-                                :username => Ensembl.username,
-                                :password => Ensembl.password,
-                                :database => Ensembl.species+'_variation_'+Ensembl.version+'_'+Ensembl.hg_version,
-                                :reconnect => true
+      self.establish_connection :variation
 
     end
 
@@ -42,7 +37,7 @@ module Ensembl
     end
 
     class Attrib < ModelBase
-      self.extend SearchByAttribute
+      self.extend AttributeLike
 
       belongs_to :attrib_type
     end
@@ -52,10 +47,17 @@ module Ensembl
     end
 
     class AttribType < ModelBase
+
       has_many :attribs, class_name: 'Attrib'
       has_many :pheotype_feature_attrib
       has_many :phenotype_features, through: :phenotype_feature_attrib
 
+      scope :common_values, -> { where(attrib_type_id: self.mapping_hash.keys)}
+
+      def self.mapping_hash
+        @@mapping_hash||={14=>:risk_allele,15=>:p_value,24=>:odds_ratio}
+        @@mapping_hash
+      end
     end
 
     class CompressedGenotypeRegion < Connection
@@ -189,6 +191,15 @@ module Ensembl
 
     class Phenotype < ModelBase
       has_many :phenotype_features
+
+      def studies
+        ids=phenotype_features
+        .with_studies
+        .uniq
+        .pluck(:study_id)
+
+        Study.where(study_id: ids)
+      end
     end
 
     class PhenotypeFeature < ModelBase
@@ -208,6 +219,7 @@ module Ensembl
       has_many :attrib_types, through: :phenotype_feature_attribs
 
       scope :significant, -> { where(is_significant: true )}
+      scope :with_studies, -> { where.not(study_id:nil)}
 
       def variation
         Variation.find_by name: object_id
@@ -244,7 +256,7 @@ module Ensembl
     end
 
     class Population < ModelBase
-      self.extend Ensembl::SearchByName
+      # self.extend Ensembl::SearchByName
 
       has_many :alleles
       has_many :population_synonyms
@@ -380,7 +392,7 @@ module Ensembl
     end
 
     class Study < ModelBase
-      include SearchByAttribute
+      include AttributeLike
 
       default_scope -> { includes(:source) }
 
@@ -392,6 +404,7 @@ module Ensembl
       # FIXME: No data in database
       has_many :study_variations
       has_many :variations, through: :study_variations
+
     end
 
     # FIXME: No data in database
@@ -430,7 +443,7 @@ module Ensembl
     end
 
     class Variation < ModelBase
-      self.extend Ensembl::SearchByName
+      include AttributeLike
 
       belongs_to :source
 
@@ -451,6 +464,20 @@ module Ensembl
 
       has_many :individual_genotype_multiple_bps
       has_many :compressed_genotype_vars
+
+      scope :name_like, ->(name, search_type=:starts_with){
+        at=self.arel_table
+
+        if search_type == :ends_with
+          where(at[:name].matches("%#{name}"))
+        elsif search_type == :starts_with
+          where(at[:name].matches("#{name}%"))
+        else
+          where(at[:name].matches("%#{name}%"))
+        end
+
+      }
+
 
       def phenotype_features
         PhenotypeFeature.eager_load(:phenotype).where(object_id_column: name, type: 'Variation')
@@ -480,16 +507,13 @@ module Ensembl
         .pluck(:phenotype_feature_id,'phenotype.description',:phenotype_id)
         .each{ |r| hash[r[0]][:phenotype]=r[1]; hash[r[0]][:phenotype_id]=r[2]}
 
-
         PhenotypeFeatureAttrib
-        .joins(:attrib_type)
-        .where(phenotype_feature_id: hash.keys, attrib_type: { attrib_type_id: [14,15,24] })
-        .pluck('phenotype_feature_attrib.phenotype_feature_id','phenotype_feature_attrib.value','attrib_type.name')
-        .each{ |v| hash[v[0]][v[2].parameterize.underscore.to_sym]=v[1] }
+        .where(phenotype_feature_id: hash.keys)
+        .pluck('phenotype_feature_attrib.phenotype_feature_id','phenotype_feature_attrib.value','phenotype_feature_attrib.attrib_type_id')
+        .each{ |v| hash[v[0]][AttribType.mapping_hash[v[2]]]=v[1] }
 
         hash
       end
-
 
       def synonyms
         variation_synonyms.map{ |vs| vs.name }
@@ -520,6 +544,21 @@ module Ensembl
         return v unless v.nil?
         vs = VariationSynonym.eager_load(:variation).find_by(name: name)
         vs.variation unless vs.nil?
+      end
+
+      def self.search(name)
+        #select(:variation_id,:name).union(VariationSynonym.select(:variation_id,:name))
+        # where()
+        # variation_synonyms.arel_table
+        # self.eager_load(:variation_synonyms).
+        # v_ids = []
+        table = arel_table
+        where(table[:name].matches("#{name}%"))
+        #
+        # table = VariationSynonym.arel_table
+        # v_ids << VariationSynonym.where(table[:name].matches("#{name}%")).pluck(:variation_id)
+        #
+        # where(variation_id: v_ids)
       end
 
       def all_phenotype_features
@@ -563,7 +602,7 @@ module Ensembl
     end
 
     class VariationSet < ModelBase
-      self.extend Ensembl::SearchByName
+      # self.extend Ensembl::SearchByName
 
       belongs_to :short_name, foreign_key: 'short_name_attrib_id', class_name: 'Attrib'
       has_many :structural_variations
@@ -597,6 +636,19 @@ module Ensembl
     class VariationSynonym < ModelBase
       belongs_to :variation
       belongs_to :source
+
+      scope :name_like, ->(name, search_type=:starts_with){
+        at=self.arel_table
+
+        if search_type == :ends_with
+          where(at[:name].matches("%#{name}"))
+        elsif search_type == :starts_with
+          where(at[:name].matches("#{name}%"))
+        else
+          where(at[:name].matches("%#{name}%"))
+        end
+
+      }
     end
   end
 end

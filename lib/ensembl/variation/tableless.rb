@@ -13,12 +13,8 @@ module Ensembl
       belongs_to :individual
       belongs_to :genotype_code
 
-      #has_one :allele_code, through: :genotype_code
-
       delegate :individual_populations, to: :individual
       delegate :populations, to: :individual
-
-
     end
   end
 end

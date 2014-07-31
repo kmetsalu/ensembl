@@ -12,13 +12,7 @@ module Ensembl
 
       self.abstract_class = true
 
-      self.establish_connection :adapter  => "mysql2",
-                                :host     => Ensembl.host,
-                                :username => Ensembl.username,
-                                :password => Ensembl.password,
-                                :database => Ensembl.species+'_core_'+Ensembl.version+'_'+Ensembl.hg_version,
-                                :reconnect => true
-
+      self.establish_connection :core
     end
 
     class ModelBase < Connection

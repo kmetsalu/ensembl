@@ -1,0 +1,17 @@
+default: &default
+  adapter: mysql2
+  host: ensembldb.ensembl.org
+  port: 3306
+  username: anonymous
+  password: ''
+  reconnect: true
+  timeout: 1000
+  pool: 5
+
+core:
+  <<: *default
+  database: homo_sapiens_variation_75_37
+
+variation:
+  <<: *default
+  database: homo_sapiens_variation_75_37
