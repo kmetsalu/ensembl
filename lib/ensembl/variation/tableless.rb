@@ -3,6 +3,7 @@ require 'activerecord-tableless'
 
 module Ensembl
   module Variation
+
     class IndividualGenotype < ActiveRecord::Base
       has_no_table
 
@@ -16,5 +17,6 @@ module Ensembl
       delegate :individual_populations, to: :individual
       delegate :populations, to: :individual
     end
+
   end
 end

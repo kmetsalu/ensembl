@@ -37,7 +37,7 @@ module Ensembl
     end
 
     class Attrib < ModelBase
-      self.extend AttributeLike
+      # self.extend AttributeLike
 
       belongs_to :attrib_type
     end
@@ -55,8 +55,15 @@ module Ensembl
       scope :common_values, -> { where(attrib_type_id: self.mapping_hash.keys)}
 
       def self.mapping_hash
-        @@mapping_hash||={14=>:risk_allele,15=>:p_value,24=>:odds_ratio}
-        @@mapping_hash
+        @mapping_hash||={14=>:risk_allele,15=>:p_value,23=>:odds_ratio,24=>:beta}
+      end
+
+      def self.key(value)
+        mapping_hash.key(value)
+      end
+
+      def self.symbol(key)
+        mapping_hash[key]
       end
     end
 
@@ -76,11 +83,9 @@ module Ensembl
         # FIXME: Should be in GenotypeCodes class or should use caching
         allele_codes=GenotypeCode.eager_load(:allele_code).where(:genotype_code_id=>genotype_code_ids.uniq).inject({}){|hsh,gc|hsh[gc.genotype_code_id]=gc.allele_code.allele;hsh}
 
-            #genotype_code_ids.uniq.inject({}) { |hsh, gc_id | hsh[gc_id]=GenotypeCode.find(gc_id).allele_code.allele;hsh  }
-
         @igs||=unpacked_genotypes.map{|s|
           IndividualGenotype.new({ individual_id:  s[0],
-                                   genotype_code_id:s[1],
+                                   genotype_code_id: s[1],
                                    allele: allele_codes[s[1]] })}
       end
 
@@ -129,9 +134,19 @@ module Ensembl
     end
 
     class GenotypeCode < ModelBase
-
       belongs_to :allele_code
 
+      def self.genotype_for(genotype_code_id)
+        joins(:allele_code).where(genotype_code_id: genotype_code_id).order(:haplotype_id).pluck('allele_code.allele').join('|')
+      end
+
+      def self.genotypes_for(genotype_code_ids)
+        includes(:allele_code).where(genotype_code_id: genotype_code_ids).pluck('genotype_code.genotype_code_id','genotype_code.haplotype_id','allele_code.allele').group_by{|r| r[0]}.map{|k,v| [k,v.sort_by{|f,s| f[1]<=>s[1]}.map{|v| v[2]}.join('|')]}
+      end
+
+      def self.genotypes_hash_for(genotype_code_ids)
+        genotypes_for(genotype_code_ids).to_h
+      end
     end
 
     class Individual < ModelBase
@@ -163,8 +178,12 @@ module Ensembl
       belongs_to :individual
       belongs_to :population
 
-      scope :displayable, -> { joins(:population).where(population: {display:true})}
-      scope :by_ids, ->(ids) { where(individual_id: ids) }
+      scope :displayable, -> { joins(:population).merge(Population.displayable) }
+      scope :thousand_genomes, -> { joins(:population).merge(Population.thousand_genomes)}
+
+      scope :by_individual_ids, ->(ids) { where(individual_id: ids) }
+
+
     end
 
     class IndividualSynonym < Connection
@@ -198,6 +217,8 @@ module Ensembl
         .uniq
         .pluck(:study_id)
 
+        return nil unless ids.size > 0 #
+
         Study.where(study_id: ids)
       end
     end
@@ -205,8 +226,6 @@ module Ensembl
     class PhenotypeFeature < ModelBase
       # FIXME: Hack because using type column in the database
       self.inheritance_column = ':_no_inheritance_column'
-
-      # default_scope -> { includes(:phenotype,:source,:study) }
 
       alias_attribute :object_id_column, :object_id
 
@@ -250,13 +269,21 @@ module Ensembl
       belongs_to :attrib_type
       belongs_to :phenotype_feature
 
-      scope :risk_alleles, -> { where(attrib_type_id: 14) }
-      scope :p_values, -> { where(attrib_type_id: 15) }
-      scope :odds_ratios, -> { where(attrib_type_id: 24)}
+      scope :risk_alleles, -> {
+        where(attrib_type_id: AttribType.key(:risk_allele)) }
+
+      scope :p_values, -> {
+        where(attrib_type_id: AttribType.key(:p_value)) }
+
+      scope :odds_ratios, -> {
+        where(attrib_type_id: AttribType.key(:odds_ratio))}
+
+      scope :betas, -> {
+        where(attrib_type_id: AttribType.key(:beta))}
     end
 
     class Population < ModelBase
-      # self.extend Ensembl::SearchByName
+      # self.extend Ensembl::AttributeLike
 
       has_many :alleles
       has_many :population_synonyms
@@ -273,6 +300,7 @@ module Ensembl
       has_many :population_genotypes
 
       scope :displayable, -> { where(display:'LD')}
+      scope :thousand_genomes, -> { displayable.starts_with(:name,'1000GENOMES')}
 
       def all_individual_populations
         IndividualPopulation.where(population_id: sub_population_ids(self)<<id)
@@ -328,16 +356,8 @@ module Ensembl
       belongs_to :variation_feature
     end
 
-    # class SeqRegion < Ensembl::Core::SeqRegion
-    #   belongs_to :coord_system
-    #   has_many :compressed_genotype_regions
-    #   has_many :phenotype_features
-    #   has_many :structureal_variation_features
-    # end
-
     class StrainGtypePoly < Connection
       belongs_to :variation
-
     end
 
     class StructuralVariation < ModelBase
@@ -392,7 +412,7 @@ module Ensembl
     end
 
     class Study < ModelBase
-      include AttributeLike
+      # include AttributeLike
 
       default_scope -> { includes(:source) }
 
@@ -443,7 +463,6 @@ module Ensembl
     end
 
     class Variation < ModelBase
-      include AttributeLike
 
       belongs_to :source
 
@@ -465,22 +484,14 @@ module Ensembl
       has_many :individual_genotype_multiple_bps
       has_many :compressed_genotype_vars
 
-      scope :name_like, ->(name, search_type=:starts_with){
-        at=self.arel_table
-
-        if search_type == :ends_with
-          where(at[:name].matches("%#{name}"))
-        elsif search_type == :starts_with
-          where(at[:name].matches("#{name}%"))
-        else
-          where(at[:name].matches("%#{name}%"))
-        end
-
-      }
-
-
       def phenotype_features
         PhenotypeFeature.eager_load(:phenotype).where(object_id_column: name, type: 'Variation')
+      end
+
+      def all_phenotype_features
+        object_ids = synonyms
+        object_ids<<name
+        PhenotypeFeature.eager_load(:phenotype).where(object_id: object_ids, type: 'Variation')
       end
 
       # Made because of the need to cut down database queries
@@ -504,36 +515,64 @@ module Ensembl
 
         all_phenotype_features
         .joins(:phenotype)
-        .pluck(:phenotype_feature_id,'phenotype.description',:phenotype_id)
+        .pluck(
+            :phenotype_feature_id,
+            'phenotype.description',
+            :phenotype_id)
         .each{ |r| hash[r[0]][:phenotype]=r[1]; hash[r[0]][:phenotype_id]=r[2]}
 
         PhenotypeFeatureAttrib
         .where(phenotype_feature_id: hash.keys)
-        .pluck('phenotype_feature_attrib.phenotype_feature_id','phenotype_feature_attrib.value','phenotype_feature_attrib.attrib_type_id')
-        .each{ |v| hash[v[0]][AttribType.mapping_hash[v[2]]]=v[1] }
+        .pluck(
+            'phenotype_feature_attrib.phenotype_feature_id',
+            'phenotype_feature_attrib.value',
+            'phenotype_feature_attrib.attrib_type_id')
+        .each{ |v| hash[v[0]][AttribType.symbol(v[2])]=v[1] }
 
         hash
       end
 
-      def synonyms
-        variation_synonyms.map{ |vs| vs.name }
+      def synonym_names
+        variation_synonyms.map{|vs| vs.name}
       end
 
-      def genotype_frequencies
-        igs=compressed_genotype_vars
-        .map{|cgv| cgv.individual_genotypes }
-        .flatten
-        .each_with_object(Hash.new){ |o,hsh| hsh[o.individual_id] = o.allele;hsh}
+      # Genotype counts for each population
+      # @returns {"CSHL-HAPMAP:HapMap-CEU"=>{"C|T"=>59, "C|C"=>102, "T|T"=>12},
+      # "CSHL-HAPMAP:HapMap-YRI"=>{"C|C"=>172, "C|T"=>1}}
+      def genotype_counts
+        counts = Hash.new{ |hsh,k| hsh[k] = Hash.new 0 }
 
-        counts=Hash.new 0
+        individual_populations.pluck('population.name',:individual_id).map{|ip| [ip[0],genotype_codes[individual_genotypes[ip[1]]]] }.each{|r| counts[r[0]][r[1]]+=1}
 
-        IndividualPopulation
-        .displayable
-        .by_ids(igs.keys)
-        .map{|ip| [ip.population_id,igs[ip.individual_id]] }
-        .each{|pig| counts[pig]+=1 }
+        return counts
+      end
 
-        counts.group_by{|k,v| k[0]}
+      # Individual and genotype_code id's related to variation
+      # @returns
+      # Example:
+      # [[1,2],[2,3],[<individual_id>,<genotype_code_id>]]
+      def individual_genotypes
+        @individual_genotypes||=compressed_genotype_vars.map{|cgv| cgv.unpacked_genotypes }.flatten(1).to_h
+      end
+
+      def individual_genotype_ids
+        individual_genotypes.keys
+      end
+
+      # IndividualPopulations from individual_genotypes
+      # @returns [IndividualPopulation,IndividualPopulation,...]
+      def individual_populations
+        IndividualPopulation.where(individual_id: individual_genotype_ids)
+      end
+
+      def genotype_code_ids
+        @genotype_code_ids||=individual_genotypes.values.uniq
+      end
+
+      # Unique genotype codes from individual_genotypes
+      # @returns [<genotype_code_id>=>'G|C',2=>'A|A']
+      def genotype_codes
+        @genotype_codes||=GenotypeCode.genotypes_hash_for(genotype_code_ids)
       end
 
       # Find Variation by also using VariationSynonyms
@@ -543,28 +582,25 @@ module Ensembl
         v  = self.find_by(name: name)
         return v unless v.nil?
         vs = VariationSynonym.eager_load(:variation).find_by(name: name)
-        vs.variation unless vs.nil?
+        return vs.variation unless vs.nil?
+        nil
       end
 
-      def self.search(name)
-        #select(:variation_id,:name).union(VariationSynonym.select(:variation_id,:name))
-        # where()
-        # variation_synonyms.arel_table
-        # self.eager_load(:variation_synonyms).
-        # v_ids = []
-        table = arel_table
-        where(table[:name].matches("#{name}%"))
-        #
-        # table = VariationSynonym.arel_table
-        # v_ids << VariationSynonym.where(table[:name].matches("#{name}%")).pluck(:variation_id)
-        #
-        # where(variation_id: v_ids)
+      def self.find_all_by_name(name)
+        v_ids = where(name: name).pluck(:variation_id)
+        v_ids = variation_synonyms.where(name: name).pluck(:variation_id) if v_ids.nil?
+
+        return nil if v_ids.nil?
+
+        where(variation_id: v_ids).order(:name)
       end
 
-      def all_phenotype_features
-        object_ids = variation_synonyms.pluck :name
-        object_ids<<name
-        PhenotypeFeature.eager_load(:phenotype).where(object_id: object_ids, type: 'Variation')
+      def genes
+        variation_genenames.pluck(:gene_name)
+      end
+
+      def positions
+        variation_features.includes(:seq_region).pluck('seq_region.name',:seq_region_start,:seq_region_end,:seq_region_strand).map{|r| Ensembl::Helpers::VariationPosition.new(r)}
       end
 
     end
@@ -586,6 +622,15 @@ module Ensembl
 
       def variation_sets
         VariationSets.where[variation_set_id: [variation_set_id.split(',').map{|id| id.to_i }]] unless variation_set_id.nil?
+      end
+
+      def strand_name(id)
+        case(id)
+          when 1
+            'forward'
+          else
+            'reverse'
+        end
       end
 
       def class_type

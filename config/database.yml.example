@@ -10,7 +10,7 @@ default: &default
 
 core:
   <<: *default
-  database: homo_sapiens_variation_75_37
+  database: homo_sapiens_core_75_37
 
 variation:
   <<: *default

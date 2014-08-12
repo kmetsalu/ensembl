@@ -20,25 +20,13 @@ Or install it yourself as:
 
 ## Usage
 
-    require 'ensembl'
+    Copy config/database.yml.example to database.yml and change parameters if needed 
 
-### ENSEMBL.ORG database - Default configuration
+### Using
     
     Ensembl::Variation::Variation.first
     
     Ensembl::Variation::Variation.first.source
-
-### Custom database
-    
-    # Set following values before using - Only Human databases is somewhat tested.
-    
-    Ensembl.host = 'myhost.example.com'
-    Ensembl.port = 3306                                 # default
-    Ensembl.username = 'anonymous'                      # default
-    Ensembl.password = ''                               # default
-    Ensembl.species = 'homo_sapiens'                    # default
-    Ensembl.version = 75                                # default
-    Ensembl.hg_version = 37                             # default
     
 
 ## Contributing
