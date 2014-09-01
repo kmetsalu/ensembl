@@ -234,15 +234,17 @@ module Ensembl
       belongs_to :study
       belongs_to :seq_region, class_name: 'Ensembl::Core::SeqRegion'
 
+      has_one :variation, primary_key: 'object_id', foreign_key: 'name'
+
       has_many :phenotype_feature_attribs
       has_many :attrib_types, through: :phenotype_feature_attribs
 
       scope :significant, -> { where(is_significant: true )}
       scope :with_studies, -> { where.not(study_id:nil)}
 
-      def variation
-        Variation.find_by name: object_id
-      end
+      # def variation
+      #   Variation.find_by name: object_id
+      # end
 
       def risk_allele
         pf=phenotype_feature_attribs.risk_alleles.first
@@ -489,7 +491,7 @@ module Ensembl
       end
 
       def all_phenotype_features
-        object_ids = synonyms
+        object_ids = synonym_names
         object_ids<<name
         PhenotypeFeature.eager_load(:phenotype).where(object_id: object_ids, type: 'Variation')
       end
