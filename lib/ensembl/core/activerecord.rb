@@ -7,11 +7,8 @@ module Ensembl
       end
     end
 
-    # ConnectionPool implemented from:
-    # http://www.lucasallan.com/2014/05/26/fixing-concurrency-issues-with-active-record-in-a-rack-application.html
-    class Connection < ActiveRecord::Base
+    class Connection < ConnectionPooledBase
       self.extend Ensembl::TableNameOverrides
-      self.extend Ensembl::ConnectionPool
 
       self.abstract_class = true
 
