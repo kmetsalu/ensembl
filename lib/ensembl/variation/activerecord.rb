@@ -5,7 +5,7 @@ module Ensembl
 
     # ConnectionPool implemented from:
     # http://www.lucasallan.com/2014/05/26/fixing-concurrency-issues-with-active-record-in-a-rack-application.html
-    class Connection < ConnectionPooledBase
+    class Connection < ActiveRecord::Base
 
       self.extend Ensembl::TableNameOverrides
 
@@ -13,6 +13,15 @@ module Ensembl
 
       self.establish_connection :variation
 
+      # ConnectionPool implemented from:
+      # http://www.lucasallan.com/2014/05/26/fixing-concurrency-issues-with-active-record-in-a-rack-application.html
+      singleton_class.send(:alias_method, :original_connection, :connection)
+
+      def self.connection
+        ActiveRecord::Base.connection_pool.with_connection do |conn|
+          conn
+        end
+      end
     end
 
     class ModelBase < Connection
