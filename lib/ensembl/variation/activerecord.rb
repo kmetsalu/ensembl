@@ -2,8 +2,13 @@ require 'active_record'
 
 module Ensembl
   module Variation
+
+    # ConnectionPool implemented from:
+    # http://www.lucasallan.com/2014/05/26/fixing-concurrency-issues-with-active-record-in-a-rack-application.html
     class Connection < ActiveRecord::Base
-      self.extend TableNameOverrides
+
+      self.extend Ensembl::TableNameOverrides
+      self.extend Ensembl::ConnectionPool
 
       self.abstract_class = true
 

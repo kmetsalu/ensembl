@@ -19,18 +19,17 @@ module Ensembl
     end
   end
 
-  # module AttributeLike
-  #   def a_like(attribute, string, search_type=:between)
-  #     at=self.arel_table
-  #     if search_type == :ends_with
-  #       where(at[attribute].matches("%#{string}"))
-  #     elsif search_type == :starts_with
-  #       where(at[attribute].matches("#{string}%"))
-  #     else
-  #       where(at[attribute].matches("%#{string}%"))
-  #     end
-  #   end
-  # end
+  # ConnectionPool implemented from:
+  # http://www.lucasallan.com/2014/05/26/fixing-concurrency-issues-with-active-record-in-a-rack-application.html
+  module ConnectionPool
+    singleton_class.send(:alias_method, :original_connection, :connection)
+
+    def self.connection
+      ActiveRecord::Base.connection_pool.with_connection do |conn|
+        conn
+      end
+    end
+  end
 end
 
 require File.dirname(__FILE__) + '/ensembl/helpers/like_search.rb'
