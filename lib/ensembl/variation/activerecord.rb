@@ -68,7 +68,7 @@ module Ensembl
       scope :common_values, -> { where(attrib_type_id: self.mapping_hash.keys)}
 
       def self.mapping_hash
-        @mapping_hash||={14=>:risk_allele,15=>:p_value,23=>:odds_ratio,24=>:beta}
+        @mapping_hash||={14=>:risk_allele,15=>:x,23=>:odds_ratio,24=>:beta}
       end
 
       def self.key(value)
