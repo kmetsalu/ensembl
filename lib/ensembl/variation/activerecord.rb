@@ -470,7 +470,6 @@ module Ensembl
 
     class TranscriptVariation < ModelBase
       belongs_to :variation_feature
-
     end
 
     class TranslationMd5 < ModelBase
@@ -495,6 +494,7 @@ module Ensembl
       has_many :variation_hgvs, class_name: 'VariationHgvs'
       has_many :variation_sets
       has_many :variation_features
+      has_many :variation_transcripts, through: :variation_features, source: :transcript_variations
 
       has_many :individual_genotype_multiple_bps
       has_many :compressed_genotype_vars
@@ -632,8 +632,13 @@ module Ensembl
       belongs_to :seq_region, class_name: 'Ensembl::Core::SeqRegion'
 
       has_many :transcript_variations
+
       has_many :motif_freature_variations
       has_many :tagged_variation_features
+
+      def position
+        [seq_region.name, seq_region_start, seq_region_end, seq_region_strand]
+      end
 
       def variation_sets
         VariationSets.where[variation_set_id: [variation_set_id.split(',').map{|id| id.to_i }]] unless variation_set_id.nil?
