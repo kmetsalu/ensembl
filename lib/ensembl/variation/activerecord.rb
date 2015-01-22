@@ -636,15 +636,15 @@ module Ensembl
       has_many :motif_freature_variations
       has_many :tagged_variation_features
 
-      class << columns_hash['consequence_types']
-        def type
-          :array
-        end
-      end
+      attribute :consequence_types, Type::String.new
 
       def position
         [seq_region.name, seq_region_start, seq_region_end, seq_region_strand]
       end
+
+      # def consequence_types
+      #   consequence_types_before_type_cast
+      # end
 
       def variation_sets
         VariationSets.where[variation_set_id: [variation_set_id.split(',').map{|id| id.to_i }]] unless variation_set_id.nil?
