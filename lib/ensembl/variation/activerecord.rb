@@ -636,6 +636,12 @@ module Ensembl
       has_many :motif_freature_variations
       has_many :tagged_variation_features
 
+      class << columns_hash['consequence_types']
+        def type
+          :array
+        end
+      end
+
       def position
         [seq_region.name, seq_region_start, seq_region_end, seq_region_strand]
       end
